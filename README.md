@@ -1,226 +1,108 @@
-📋 Перенос ваших скриптов на Linux
-Скопируйте ваши скрипты из Windows в Linux папку:
+# Finam Bot
 
-currency_rates.py
+Python-проект для работы с рыночными данными и торговой инфраструктурой Финам: получение котировок, поиск арбитражных возможностей, контроль риска и исполнение заявок.
 
-arbitrage_trader.py
+> **Текущее состояние:** проект находится в поэтапной реструктуризации. Новый слой `src/finam_bot/` уже создан, но торговый execution engine ещё не реализован. Live-торговля через новую архитектуру намеренно отключена.
 
-⚠️ Особенности Linux
-1. Пути к файлам
-В Linux используйте прямые слеши:
+## С чего начать, если вернулись к проекту через неделю или месяц
 
-python
-# Windows: E:\CryptoBots\FinamPy\file.log
-# Linux:  /home/user/CryptoBots/FinamPy/file.log
-В скриптах измените пути в логировании:
+1. Прочитайте этот `README.md`.
+2. Откройте [`docs/PROJECT.md`](docs/PROJECT.md) — что это за проект, зачем он нужен и как устроен.
+3. Откройте [`docs/STATUS.md`](docs/STATUS.md) — актуальное состояние, сделанные изменения и следующий шаг.
+4. Откройте [`docs/STRUCTURE.md`](docs/STRUCTURE.md) — целевая структура каталогов и правила.
+5. Откройте [`docs/ROADMAP.md`](docs/ROADMAP.md) — последовательность дальнейшей работы.
+6. Откройте [`docs/DECISIONS.md`](docs/DECISIONS.md) — важные решения и причины, по которым они приняты.
 
-python
-logging.FileHandler('arbitrage_trader.log')  # сохранит в текущей папке
-# или полный путь:
-logging.FileHandler('/home/user/CryptoBots/FinamPy/arbitrage_trader.log')
-2. Права на выполнение
-Сделайте скрипты исполняемыми:
+## Целевая архитектура
 
-bash
-chmod +x arbitrage_trader.py
-3. Запуск в фоне
-Для длительной работы используйте nohup или screen:
+```text
+Finam API
+    │
+    ▼
+API adapter
+    │
+    ▼
+Market data ─────► Strategy
+                      │
+                      ▼
+                    Risk
+                      │
+                      ▼
+                  Order plan
+                      │
+                      ▼
+                  Execution
+                      │
+                      ▼
+                Fill control
+                      │
+                      ▼
+            Position reconciliation
+                      │
+                      ▼
+                    Unwind
+```
 
-bash
-# Через nohup
-nohup python3 arbitrage_trader.py > arbitrage.log 2>&1 &
+Собственный код постепенно собирается в `src/finam_bot/`:
 
-# Через screen
-screen -S arbitrage
-python3 arbitrage_trader.py
-# Ctrl+A, затем D - отключиться
-screen -r arbitrage - вернуться
-🐛 Решение возможных проблем
-Проблема с keyring
-bash
-# Если токен не сохраняется
-pip install keyrings.alt
-# или используйте файловое хранилище
-export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
-Проблема с tzdata
-bash
-# Системная установка (не через pip)
-sudo apt install tzdata
-Проблема с правами доступа
-bash
-# Если ошибки доступа к файлам логов
-touch arbitrage_trader.log
-chmod 666 arbitrage_trader.log
-📝 Полный скрипт установки для Linux
-Создайте файл install_linux.sh:
+```text
+src/finam_bot/
+├── api/          # граница приложения с Finam API
+├── market/       # котировки и рыночные модели
+├── strategy/     # стратегия и арбитражные модели
+├── risk/         # ограничения и проверки риска
+├── execution/    # заявки, fills и unwind
+├── monitoring/   # мониторинг
+└── app.py        # application entry point
+```
 
-bash
-#!/bin/bash
+## Безопасность: почему live-торговля пока отключена
 
-echo "🚀 Установка FinamPy на Linux"
+Старый арбитражный код нельзя считать безопасным live execution engine. Историческая реализация:
 
-# Проверка Python
-if ! command -v python3.12 &> /dev/null; then
-    echo "Устанавливаю Python 3.12..."
-    sudo apt update
-    sudo apt install -y python3.12 python3.12-venv python3-pip
-fi
+- отправляет ноги треугольника последовательно;
+- не обеспечивает atomicity и корректную обработку partial fills;
+- не выполняет полноценную reconciliation фактических позиций;
+- содержит исторические допущения о размере тика и лотах;
+- использует `CancelOrder` там, где для уже исполненной позиции требуется отдельный механизм закрытия/unwind.
 
-# Создание виртуального окружения
-echo "Создаю виртуальное окружение..."
-python3.12 -m venv .venv
-source .venv/bin/activate
+Поэтому новая `execution`-ветка пока содержит безопасную заглушку и не размещает реальные заявки.
 
-# Установка пакетов
-echo "Устанавливаю FinamPy и зависимости..."
-pip install --upgrade pip
-pip install git+https://github.com/cia76/FinamPy.git
-pip install tzdata keyring
+## Legacy-код
 
-echo ""
-echo "✅ Установка завершена!"
-echo ""
-echo "Дальнейшие действия:"
-echo "1. Активируйте окружение: source .venv/bin/activate"
-echo "2. Сохраните токен: python3 save_token.py"
-echo "3. Запустите бота: python3 arbitrage_trader.py"
-Запустите:
+Старые модули оставлены для переходного периода. `core/` заморожен: новые функции туда не добавляются. Legacy entrypoints мигрируются по одному и удаляются только после проверки импортов и тестов.
 
-bash
-chmod +x install_linux.sh
-./install_linux.sh
-🔄 Перенос скриптов из Windows в Linux
-Если вы хотите перенести уже написанные скрипты:
+Особенно осторожно относиться к:
 
-bash
-# Скопируйте файлы
-cp /путь/к/windows/файлам/*.py ~/CryptoBots/FinamPy/
+- `arbitrage_trader.py`
+- `arbitrage_finder.py`
+- `core/arb_*`
+- `currency_monitor_cli.py`
+- `core/currency_monitor.py`
+- `core/connection.py`
+- `FinamPy/`
 
-# В скриптах замените пути в logging.FileHandler
-# Вместо 'E:\\...\\file.log' используйте просто 'file.log'
-Главное отличие Linux - это работа с путями и права доступа, но сам код Python работает одинаково на обеих системах!
+## Проверка текущей новой точки входа
 
-Итоговая структура:
+Проверка архитектуры должна выполняться без подключения к торговому счёту:
 
-text
-~/CryptoBots/FinamPy/
-├── core/              # Основные модули
-├── config/            # Конфигурационные файлы
-├── logs/              # Лог-файлы
-├── diagnostics/       # Диагностические скрипты
-├── data/              # Сохраненные данные
-├── arbitrage_bot.py   # Основной скрипт
-└── requirements.txt   # Зависимости
+```bash
+PYTHONPATH=src python3 run_arbitrage.py --check
+```
 
-📋 Как использовать
+Обычный запуск нового контура намеренно завершится с сообщением о том, что execution engine ещё не реализован. Это ожидаемое безопасное поведение.
 
-1. Сохраните токен (первый запуск)
-   
-bash
+## Разработка
 
-cd ~/CryptoBots/FinamPy
+До реализации нового execution engine не следует включать live-торговлю. Изменения торговой логики должны сопровождаться тестами и отдельными коммитами от структурной миграции.
 
-python3 currency_monitor_cli.py --token "ВАШ_ТОКЕН"
+Runtime-логи, виртуальные окружения, `__pycache__`, build-артефакты и локальные данные не должны попадать в Git.
 
-3. Запустите диагностику
-   
-bash
+## Документация
 
-python3 currency_monitor_cli.py --diagnostics
-
-4. Полная проверка системы
-   
-bash
-
-python3 currency_monitor_cli.py --check
-
-5. Запустите мониторинг в реальном времени
-bash
-
-python3 currency_monitor_cli.py
-
-🎯 Что вы увидите
-При запуске мониторинга вы увидите:
-📊 Таблицу со всеми валютными парами
-🟢 Зеленые цены при росте
-🔴 Красные цены при падении
-📈 Топ изменений
-⏱️ Время работы и количество обновлений
-
-🔄 Запуск в фоне на Linux
-bash
-# Запуск в фоне
-nohup python3 currency_monitor_cli.py > monitor.log 2>&1 &
-
-# Просмотр лога
-tail -f monitor.log
-Теперь у вас есть полноценная система мониторинга валют в реальном времени, объединяющая все компоненты!
-
-bash
-# Проверьте, активен ли .venv
-which pip
-# должно показывать: /home/ваше_имя/CryptoBots/FinamPy/.venv/bin/pip
-
-# Если не активно, активируйте:
-source .venv/bin/activate
-
-~/Bot/FinamPy/
-├── .venv/                          # виртуальное окружение
-├── core/                           # основные модули
-│   ├── __init__.py
-│   ├── connection.py
-│   └── currency_monitor.py
-├── config/                         # конфигурация
-│   ├── __init__.py
-│   └── settings.py
-├── diagnostics/                     # диагностика
-│   └── check_all.py
-├── logs/                            # логи
-├── data/                             # сохраненные данные
-├── currency_monitor_cli.py           # главный скрипт
-├── requirements.txt                   # зависимости
-└── save_token.py                      # для сохранения токена
-
-Запустите проверку системы:
-
-bash
-python3 currency_monitor_cli.py --check 
-
-
-FinamPy/
-├── run_arbitrage.py                    # Главный запускающий скрипт (уникальное имя)
-├── requirements.txt                     # Зависимости
-├── config/
-│   ├── __init__.py
-│   └── arb_config.py                    # Уникальное: arb_config.py (вместо settings.py)
-├── core/
-│   ├── __init__.py
-│   ├── arb_connection.py                 # Уникальное: arb_connection.py (вместо connection.py)
-│   ├── arb_models.py                     # Уникальное: arb_models.py (вместо data_models.py)
-│   ├── arb_calculator.py                 # Уникальное: arb_calculator.py (вместо triangle_utils.py)
-│   ├── arb_executor.py                   # Уникальное: arb_executor.py (вместо trading.py)
-│   └── arb_monitor.py                    # Уникальное: arb_monitor.py (вместо monitor.py)
-├── diagnostics/
-│   ├── __init__.py
-│   └── arb_diagnostic.py                 # Уникальное: arb_diagnostic.py (вместо checker.py)
-├── logs/
-└── data/
-
-📋 Как использовать:
-Сохраните токен (первый запуск):
-
-bash
-python3 -c "from FinamPy import FinamPy; FinamPy('ВАШ_ТОКЕН')"
-Запустите диагностику:
-
-bash
-python3 run_arbitrage.py --diagnostic
-Запустите бота в бумажном режиме:
-
-bash
-python3 run_arbitrage.py --paper
-Запустите бота в реальном режиме:
-
-bash
-python3 run_arbitrage.py
-Все файлы имеют уникальные префиксы arb_ и легко идентифицируются!
+- [`docs/PROJECT.md`](docs/PROJECT.md) — назначение, контекст и устройство проекта.
+- [`docs/STATUS.md`](docs/STATUS.md) — актуальное состояние и ближайший следующий шаг.
+- [`docs/STRUCTURE.md`](docs/STRUCTURE.md) — правила структуры каталогов.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — план миграции.
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — ключевые архитектурные решения.
+- [`core/README.md`](core/README.md) — почему legacy `core/` пока не удалён.
