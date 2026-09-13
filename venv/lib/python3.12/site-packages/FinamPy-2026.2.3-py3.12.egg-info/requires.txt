@@ -1,5 +1,0 @@
-keyring
-grpcio
-protobuf
-googleapis-common-protos
-types-protobuf
