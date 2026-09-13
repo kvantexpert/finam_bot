@@ -1,0 +1,1 @@
+"""Finam API integration."""
